@@ -52,9 +52,13 @@ function calcWinChance(party: Pokemon[], stageIndex: number, train: number, item
 }
 
 function makeStarterSegments(): WheelSegment[] {
-  const pool = ALL_POKEMON.filter(p => p.rarity <= 1 && !['Magikarp', 'Metapod', 'Kakuna', 'Caterpie', 'Weedle'].includes(p.name));
-  const picks = pickRandom(pool, 8);
-  return picks.map(p => ({ label: p.name, color: TYPE_COLORS[p.type1] || '#888', weight: 1, data: p }));
+  const starters = ALL_POKEMON.filter(p => ['Bulbasaur', 'Charmander', 'Squirtle', 'Pikachu'].includes(p.name));
+  return starters.map(p => ({
+    label: p.name,
+    color: TYPE_COLORS[p.type1] || '#888',
+    weight: p.name === 'Pikachu' ? 5 : 31.67,
+    data: p,
+  }));
 }
 
 function makeBattleSegments(wc: number): WheelSegment[] {
@@ -177,8 +181,11 @@ export function useGameState() {
           const p = segment.data as Pokemon;
           s.party = [p];
           s.log.push(`🎉 You chose ${p.name} as your starter!`);
-          const battle = advanceToBattle({ ...s, stageIndex: 0 });
-          return { ...s, ...battle, stageIndex: 0, phaseLabel: '' } as GameState;
+          // Go to intermission before first gym
+          const inter = advanceToIntermission(s, -1);
+          const ns = { ...s, ...inter, stageIndex: 0 };
+          ns.phaseLabel = getPhaseLabel(ns as GameState);
+          return ns as GameState;
         }
 
         case 'battle': {
