@@ -9,8 +9,11 @@ interface Props {
 
 export default function SpinWheel({ segments, onResult, disabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wheelRef = useRef<HTMLDivElement>(null);
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
+  const [liveLabel, setLiveLabel] = useState('');
+  const rafRef = useRef<number>(0);
   const size = 300;
 
   useEffect(() => {
@@ -65,6 +68,49 @@ export default function SpinWheel({ segments, onResult, disabled }: Props) {
     ctx.stroke();
   }, [segments]);
 
+  const getSegmentAtAngle = useCallback((deg: number) => {
+    if (!segments.length) return '';
+    const total = segments.reduce((s, seg) => s + seg.weight, 0);
+    const arrowAngle = ((-deg % 360) + 360) % 360;
+    let cumulative = 0;
+    for (const seg of segments) {
+      cumulative += (seg.weight / total) * 360;
+      if (arrowAngle < cumulative) return seg.label;
+    }
+    return segments[segments.length - 1].label;
+  }, [segments]);
+
+  // Update live label during spin via rAF
+  useEffect(() => {
+    if (!spinning || !wheelRef.current) return;
+    const update = () => {
+      if (wheelRef.current) {
+        const style = getComputedStyle(wheelRef.current);
+        const transform = style.transform;
+        if (transform && transform !== 'none') {
+          const values = transform.match(/matrix\((.+)\)/);
+          if (values) {
+            const parts = values[1].split(', ');
+            const a = parseFloat(parts[0]);
+            const b = parseFloat(parts[1]);
+            const angle = Math.atan2(b, a) * (180 / Math.PI);
+            setLiveLabel(getSegmentAtAngle(angle));
+          }
+        }
+      }
+      rafRef.current = requestAnimationFrame(update);
+    };
+    rafRef.current = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [spinning, getSegmentAtAngle]);
+
+  // Update label when not spinning
+  useEffect(() => {
+    if (!spinning) {
+      setLiveLabel(getSegmentAtAngle(rotation));
+    }
+  }, [rotation, spinning, segments, getSegmentAtAngle]);
+
   const handleSpin = useCallback(() => {
     if (spinning || disabled || !segments.length) return;
 
@@ -108,6 +154,7 @@ export default function SpinWheel({ segments, onResult, disabled }: Props) {
         </div>
         {/* Wheel container */}
         <div
+          ref={wheelRef}
           className="rounded-full glow-primary"
           style={{
             transform: `rotate(${rotation}deg)`,
@@ -116,6 +163,10 @@ export default function SpinWheel({ segments, onResult, disabled }: Props) {
         >
           <canvas ref={canvasRef} width={size} height={size} className="rounded-full" />
         </div>
+      </div>
+      {/* Current segment indicator */}
+      <div className="text-sm font-bold text-primary truncate max-w-[250px] text-center">
+        ▶ {liveLabel}
       </div>
       <button
         onClick={handleSpin}
